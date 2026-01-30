@@ -1,0 +1,102 @@
+name: Build and Release
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.21'
+
+      - name: Get version from commit
+        id: version
+        run: |
+          # Fetch all tags
+          git fetch --tags
+          
+          # Get the latest tag matching semantic versioning pattern
+          LATEST_TAG=$(git tag -l 'v*.*.*' | sort -V | tail -n 1)
+          
+          if [ -z "$LATEST_TAG" ]; then
+            # No existing tags, start at v1.0.0
+            VERSION="v1.0.0"
+          else
+            # Parse the version components
+            VERSION_PART=${LATEST_TAG#v}
+            MAJOR=$(echo $VERSION_PART | cut -d. -f1)
+            MINOR=$(echo $VERSION_PART | cut -d. -f2)
+            PATCH=$(echo $VERSION_PART | cut -d. -f3)
+            
+            # Increment patch version
+            NEW_PATCH=$((PATCH + 1))
+            VERSION="v${MAJOR}.${MINOR}.${NEW_PATCH}"
+          fi
+          
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Previous tag: $LATEST_TAG"
+          echo "New version: $VERSION"
+
+      - name: Build for multiple platforms
+        run: |
+          mkdir -p dist
+          
+          # Linux AMD64
+          GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o dist/vncrec-linux-amd64 .
+          
+          # Linux ARM64
+          GOOS=linux GOARCH=arm64 go build -ldflags="-s -w" -o dist/vncrec-linux-arm64 .
+          
+          # Windows AMD64
+          GOOS=windows GOARCH=amd64 go build -ldflags="-s -w" -o dist/vncrec-windows-amd64.exe .
+          
+          # macOS AMD64
+          GOOS=darwin GOARCH=amd64 go build -ldflags="-s -w" -o dist/vncrec-darwin-amd64 .
+          
+          # macOS ARM64 (Apple Silicon)
+          GOOS=darwin GOARCH=arm64 go build -ldflags="-s -w" -o dist/vncrec-darwin-arm64 .
+
+      - name: Create checksums
+        run: |
+          cd dist
+          sha256sum * > checksums.txt
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.version }}
+          name: Release ${{ steps.version.outputs.version }}
+          body: |
+            Automated release from merge to main branch.
+            
+            **Commit:** ${{ github.sha }}
+            **Build Date:** $(date -u +'%Y-%m-%d %H:%M:%S UTC')
+            
+            ## Downloads
+            | Platform | Architecture | File |
+            |----------|--------------|------|
+            | Linux | AMD64 | `vncrec-linux-amd64` |
+            | Linux | ARM64 | `vncrec-linux-arm64` |
+            | Windows | AMD64 | `vncrec-windows-amd64.exe` |
+            | macOS | AMD64 | `vncrec-darwin-amd64` |
+            | macOS | ARM64 (Apple Silicon) | `vncrec-darwin-arm64` |
+          files: |
+            dist/*
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
