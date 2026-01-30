@@ -47,9 +47,13 @@ jobs:
             VERSION="v${MAJOR}.${MINOR}.${NEW_PATCH}"
           fi
           
+          BUILD_DATE=$(date -u +'%Y-%m-%d %H:%M:%S UTC')
+          
           echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "build_date=$BUILD_DATE" >> $GITHUB_OUTPUT
           echo "Previous tag: $LATEST_TAG"
           echo "New version: $VERSION"
+          echo "Build date: $BUILD_DATE"
 
       - name: Build for multiple platforms
         run: |
@@ -84,7 +88,7 @@ jobs:
             Automated release from merge to main branch.
             
             **Commit:** ${{ github.sha }}
-            **Build Date:** $(date -u +'%Y-%m-%d %H:%M:%S UTC')
+            **Build Date:** ${{ steps.version.outputs.build_date }}
             
             ## Downloads
             | Platform | Architecture | File |
