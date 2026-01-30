@@ -16,6 +16,11 @@ Built on top of [amitbet/vnc2video](https://github.com/amitbet/vnc2video).
 
 ## Installation
 
+### Using go install
+```
+ go install github.com/varmakarthik12/vncrec@latest  
+```
+
 ### Building from Source
 
 ```bash
