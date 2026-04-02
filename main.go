@@ -22,10 +22,7 @@ import (
 	"time"
 )
 
-const (
-	initialRetryDelay = 5 * time.Second
-	maxRetryDelay     = 2 * time.Minute
-)
+
 
 // generateRandomSuffix creates a random hex string for unique filenames
 func generateRandomSuffix() string {
@@ -115,6 +112,18 @@ func commonFlags() []cli.Flag {
 			Usage:   "Maximum HLS recording duration to keep in seconds (default: 2 days = 172800)",
 			EnvVars: []string{"VR_HLS_MAX_DURATION"},
 		},
+		&cli.IntFlag{
+			Name:    "retry-delay",
+			Value:   5,
+			Usage:   "Initial retry delay in seconds for daemon mode (default: 5)",
+			EnvVars: []string{"VR_RETRY_DELAY"},
+		},
+		&cli.IntFlag{
+			Name:    "max-retry-delay",
+			Value:   5,
+			Usage:   "Maximum retry delay in seconds for daemon mode exponential backoff (default: 5)",
+			EnvVars: []string{"VR_MAX_RETRY_DELAY"},
+		},
 	}
 }
 
@@ -167,6 +176,8 @@ func getOutputPath(c *cli.Context) (string, error) {
 
 // daemonRecorder runs the recorder in daemon mode with infinite retries
 func daemonRecorder(c *cli.Context) error {
+	initialRetryDelay := time.Duration(c.Int("retry-delay")) * time.Second
+	maxRetryDelay := time.Duration(c.Int("max-retry-delay")) * time.Second
 	retryDelay := initialRetryDelay
 
 	logrus.Info("Starting VNC recorder in daemon mode...")

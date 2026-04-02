@@ -78,6 +78,8 @@ OPTIONS:
    --mp4-max-duration value      Max duration per MP4 file in seconds (default: 1800 = 30 min) [$VR_MP4_MAX_DURATION]
    --hls-segment-duration value  HLS segment duration in seconds, max 30 (default: 30) [$VR_HLS_SEGMENT_DURATION]
    --hls-max-duration value      Max HLS recording to retain in seconds (default: 172800 = 2 days) [$VR_HLS_MAX_DURATION]
+   --retry-delay value           Initial retry delay in seconds for daemon mode (default: 5) [$VR_RETRY_DELAY]
+   --max-retry-delay value       Maximum retry delay cap in seconds for daemon exponential backoff (default: 5) [$VR_MAX_RETRY_DELAY]
    --framerate value             Recording framerate (default: 30) [$VR_FRAMERATE]
    --crf value                   Quality setting, lower = better (default: 35) [$VR_CRF]
    --ffmpeg value                Path to ffmpeg binary (default: "ffmpeg") [$VR_FFMPEG_BIN]
@@ -100,6 +102,8 @@ COMMANDS:
 | `VR_MP4_MAX_DURATION` | Max MP4 file duration (seconds) | `1800` (30 min) |
 | `VR_HLS_SEGMENT_DURATION` | HLS segment duration (seconds) | `30` |
 | `VR_HLS_MAX_DURATION` | HLS max retention (seconds) | `172800` (2 days) |
+| `VR_RETRY_DELAY` | Initial daemon retry delay (seconds) | `5` |
+| `VR_MAX_RETRY_DELAY` | Maximum daemon retry delay cap (seconds) | `5` |
 | `VR_FRAMERATE` | Recording framerate | `30` |
 | `VR_CRF` | Quality (lower = better) | `35` |
 | `VR_FFMPEG_BIN` | FFmpeg executable path | `ffmpeg` |
@@ -131,7 +135,7 @@ vncrec daemon
 Daemon mode provides resilient, long-running recording:
 
 - **Automatic Reconnection** — Retries indefinitely if VNC connection drops
-- **Exponential Backoff** — Starts at 5s delay, doubles up to 2 minutes max
+- **Exponential Backoff** — Starts at configurable delay (default: 5s), doubles up to a configurable max (default: 5s)
 - **Continuous Recording** — Seamlessly continues recording after reconnection
 
 ```bash
