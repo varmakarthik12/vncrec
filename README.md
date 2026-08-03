@@ -13,12 +13,23 @@ Built on top of [amitbet/vnc2video](https://github.com/amitbet/vnc2video).
 - **Daemon Mode** — Continuous recording with automatic reconnection
 - **Low CPU Usage** — Uses `ultrafast` preset for minimal compute overhead
 - **Configurable** — All settings via CLI flags or environment variables
+- **Docker Ready** — Pre-built multi-arch image on GHCR
+- **Tailscale Support** — Connect to any Tailscale device with just an auth key
+
+---
 
 ## Installation
 
-### Using go install
+### Docker (recommended)
+
+```bash
+docker pull ghcr.io/varmakarthik12/vncrec:latest
 ```
- go install github.com/varmakarthik12/vncrec@latest  
+
+### Using go install
+
+```bash
+go install github.com/varmakarthik12/vncrec@latest
 ```
 
 ### Building from Source
@@ -29,14 +40,11 @@ cd vncrec
 go build -o vncrec .
 ```
 
-### Docker
-
-```bash
-docker build -t vncrec .
-docker run -v $(pwd)/recordings:/recordings vncrec --host <vnc-host>
-```
+---
 
 ## Quick Start
+
+### Binary
 
 ```bash
 # MP4 recording (default) - creates output-SUFFIX.mp4 files
@@ -49,22 +57,45 @@ vncrec --host 192.168.1.100 --password mypassword --format hls
 vncrec daemon --host 192.168.1.100 --password mypassword
 ```
 
+### Docker
+
+```bash
+# Basic MP4 recording — recordings saved to ./recordings on the host
+docker run --rm \
+  -e VR_VNC_HOST=192.168.1.100 \
+  -e VR_VNC_PASSWORD=mypassword \
+  -v $(pwd)/recordings:/recordings \
+  ghcr.io/varmakarthik12/vncrec:latest
+
+# Daemon mode (default CMD) with HLS output
+docker run -d \
+  -e VR_VNC_HOST=192.168.1.100 \
+  -e VR_VNC_PASSWORD=mypassword \
+  -e VR_FORMAT=hls \
+  -v $(pwd)/recordings:/recordings \
+  ghcr.io/varmakarthik12/vncrec:latest
+```
+
+---
+
 ## Output Structure
 
 **MP4 Format (default):**
 ```
-./recordings/
+/recordings/
 ├── output-17384756.mp4   # Rotates every 30 min (configurable)
 └── output-17385123.mp4
 ```
 
 **HLS Format:**
 ```
-./recordings/
+/recordings/
 ├── stream.m3u8           # HLS playlist
 ├── segment_20260131_010530_00001.ts
 └── segment_20260131_010530_00002.ts
 ```
+
+---
 
 ## Command Line Options
 
@@ -90,23 +121,214 @@ COMMANDS:
    daemon, d, watch   Run continuously with automatic reconnection
 ```
 
+---
+
 ## Environment Variables
+
+### vncrec Options
+
+All CLI flags are available as environment variables. These work identically whether running the binary or the Docker image.
 
 | Variable | Description | Default |
 |----------|-------------|---------|
 | `VR_VNC_HOST` | VNC server hostname | `localhost` |
 | `VR_VNC_PORT` | VNC server port | `5900` |
 | `VR_VNC_PASSWORD` | VNC password | `secret` |
-| `VR_OUTPUT_PATH` | Output directory | Current directory |
+| `VR_OUTPUT_PATH` | Output directory | `/recordings` (Docker) / current dir |
 | `VR_FORMAT` | Output format (`mp4` or `hls`) | `mp4` |
 | `VR_MP4_MAX_DURATION` | Max MP4 file duration (seconds) | `1800` (30 min) |
 | `VR_HLS_SEGMENT_DURATION` | HLS segment duration (seconds) | `30` |
 | `VR_HLS_MAX_DURATION` | HLS max retention (seconds) | `172800` (2 days) |
 | `VR_RETRY_DELAY` | Initial daemon retry delay (seconds) | `5` |
-| `VR_MAX_RETRY_DELAY` | Maximum daemon retry delay cap (seconds) | `5` |
+| `VR_MAX_RETRY_DELAY` | Maximum daemon retry delay cap (seconds) | `60` |
 | `VR_FRAMERATE` | Recording framerate | `30` |
 | `VR_CRF` | Quality (lower = better) | `35` |
-| `VR_FFMPEG_BIN` | FFmpeg executable path | `ffmpeg` |
+| `VR_FFMPEG_BIN` | FFmpeg executable path | `/usr/bin/ffmpeg` (Docker) |
+
+### Tailscale Options (Docker only)
+
+These are handled by the Docker entrypoint. Set `TS_AUTHKEY` to enable Tailscale.
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `TS_AUTHKEY` | Tailscale auth key (`tskey-auth-...`). Enables Tailscale when set. | _(disabled)_ |
+| `TS_VNC_HOST` | Tailscale machine name or hostname of the VNC server. Resolves to Tailscale IP and sets `VR_VNC_HOST` automatically. | _(not set)_ |
+| `TS_EXTRA_ARGS` | Additional arguments passed to `tailscale up` (e.g. `--hostname=vncrec`) | _(empty)_ |
+| `TS_STATE_DIR` | Directory where tailscaled stores its state | `/var/lib/tailscale` |
+
+---
+
+## Docker Usage
+
+### Pull from GitHub Container Registry
+
+```bash
+docker pull ghcr.io/varmakarthik12/vncrec:latest
+
+# Or pin to a specific commit SHA
+docker pull ghcr.io/varmakarthik12/vncrec:a1b2c3d
+```
+
+### Basic Recording
+
+```bash
+# Single MP4 recording (exits when done)
+docker run --rm \
+  -e VR_VNC_HOST=192.168.1.100 \
+  -e VR_VNC_PASSWORD=secret \
+  -v /path/to/recordings:/recordings \
+  ghcr.io/varmakarthik12/vncrec:latest
+
+# Override command to single-shot (not daemon)
+docker run --rm \
+  -e VR_VNC_HOST=192.168.1.100 \
+  -v /path/to/recordings:/recordings \
+  ghcr.io/varmakarthik12/vncrec:latest \
+  ""   # empty string = default recorder (no daemon)
+```
+
+### Daemon Mode (recommended for production)
+
+```bash
+docker run -d \
+  --name vncrec \
+  --restart unless-stopped \
+  -e VR_VNC_HOST=my-vnc-server.local \
+  -e VR_VNC_PASSWORD=secret \
+  -e VR_FORMAT=hls \
+  -e VR_HLS_MAX_DURATION=86400 \
+  -v /mnt/storage/recordings:/recordings \
+  ghcr.io/varmakarthik12/vncrec:latest
+```
+
+### Docker Compose
+
+```yaml
+services:
+  vncrec:
+    image: ghcr.io/varmakarthik12/vncrec:latest
+    restart: unless-stopped
+    environment:
+      VR_VNC_HOST: 192.168.1.100
+      VR_VNC_PASSWORD: secret
+      VR_FORMAT: mp4
+      VR_MP4_MAX_DURATION: 1800
+      VR_FRAMERATE: 30
+      VR_CRF: 35
+    volumes:
+      - ./recordings:/recordings
+```
+
+---
+
+## Tailscale Integration
+
+The Docker image includes a full Tailscale installation. This allows you to record VNC sessions from **any device on your Tailscale network** — even across NAT, firewalls, or different cloud regions — without any VPN configuration or port forwarding.
+
+### Step 1 — Get a Tailscale Auth Key
+
+1. Go to [https://login.tailscale.com/admin/settings/keys](https://login.tailscale.com/admin/settings/keys)
+2. Click **Generate auth key**
+3. Recommended settings:
+   - ✅ **Reusable** — so the container can reconnect after restart
+   - ✅ **Ephemeral** — the device is automatically removed from your tailnet when the container stops
+   - Set an appropriate **expiry** (or disable expiry for long-running containers)
+4. Copy the generated key — it looks like `tskey-auth-kXXXXXXXXX-XXXXXXXXXXXXXXXXXXXXXXXXX`
+
+### Step 2 — Run with Tailscale
+
+The container uses **userspace networking mode** — no extra Linux capabilities or `/dev/net/tun` device needed.
+
+```bash
+docker run -d \
+  --name vncrec-ts \
+  --restart unless-stopped \
+  -e TS_AUTHKEY=tskey-auth-kXXXXXXXXX-XXXXXXXXXXXXXXXXXXXXXXXXX \
+  -e TS_VNC_HOST=my-desktop \
+  -e VR_VNC_PASSWORD=secret \
+  -v /path/to/recordings:/recordings \
+  ghcr.io/varmakarthik12/vncrec:latest
+```
+
+`TS_VNC_HOST=my-desktop` is the **Tailscale machine name** of the device running the VNC server (visible in your [Tailscale admin console](https://login.tailscale.com/admin/machines)). The entrypoint automatically resolves it to the correct Tailscale IP and sets `VR_VNC_HOST`.
+
+### Step 3 — Verify connection
+
+```bash
+# Check logs to see the Tailscale IP resolution
+docker logs vncrec-ts
+```
+
+You should see output like:
+```
+[entrypoint] TS_AUTHKEY detected — starting Tailscale...
+[entrypoint] Tailscale connected! This node IP: 100.x.y.z
+[entrypoint] Resolved my-desktop -> 100.a.b.c
+[entrypoint] VNC target: 100.a.b.c:5900
+[entrypoint] Launching: vncrec daemon
+```
+
+### Tailscale + Docker Compose
+
+```yaml
+services:
+  vncrec:
+    image: ghcr.io/varmakarthik12/vncrec:latest
+    restart: unless-stopped
+    environment:
+      # Tailscale
+      TS_AUTHKEY: tskey-auth-kXXXXXXXXX-XXXXXXXXXXXXXXXXXXXXXXXXX
+      TS_VNC_HOST: my-remote-desktop      # Tailscale machine name
+      TS_EXTRA_ARGS: --hostname=vncrec-recorder  # optional: set this node's name
+      # vncrec settings
+      VR_VNC_PASSWORD: secret
+      VR_FORMAT: hls
+      VR_HLS_MAX_DURATION: 172800
+    volumes:
+      - ./recordings:/recordings
+      - tailscale-state:/var/lib/tailscale
+
+volumes:
+  tailscale-state:   # Persist Tailscale state so the node doesn't re-auth on restart
+```
+
+> **Tip:** Store `TS_AUTHKEY` as a Docker secret or in a `.env` file rather than inline in `docker-compose.yml`.
+
+### Tailscale Advanced Options
+
+```bash
+# Set a custom hostname for this recorder node in the tailnet
+-e TS_EXTRA_ARGS="--hostname=vncrec-prod"
+
+# Use a specific Tailscale exit node
+-e TS_EXTRA_ARGS="--exit-node=<exit-node-ip>"
+
+# Accept all routes from the tailnet
+-e TS_EXTRA_ARGS="--accept-routes"
+
+# Combine multiple extra args (space-separated)
+-e TS_EXTRA_ARGS="--hostname=vncrec --accept-routes"
+```
+
+---
+
+## Daemon Mode
+
+Daemon mode provides resilient, long-running recording:
+
+- **Automatic Reconnection** — Retries indefinitely if VNC connection drops
+- **Exponential Backoff** — Starts at configurable delay (default: 5s), doubles up to a configurable max
+- **Continuous Recording** — Seamlessly continues recording after reconnection
+
+```bash
+vncrec daemon --host myhost --password secret
+
+# Aliases
+vncrec d --host myhost
+vncrec watch --host myhost
+```
+
+---
 
 ## Examples
 
@@ -127,27 +349,34 @@ vncrec --host myhost --format hls --hls-segment-duration 10
 export VR_VNC_HOST=192.168.1.100
 export VR_VNC_PASSWORD=secret
 export VR_FORMAT=mp4
-vncrec daemon 
+vncrec daemon
 ```
 
-## Daemon Mode
+---
 
-Daemon mode provides resilient, long-running recording:
-
-- **Automatic Reconnection** — Retries indefinitely if VNC connection drops
-- **Exponential Backoff** — Starts at configurable delay (default: 5s), doubles up to a configurable max (default: 5s)
-- **Continuous Recording** — Seamlessly continues recording after reconnection
+## Building the Docker Image Locally
 
 ```bash
-vncrec daemon --host myhost --password secret
+git clone https://github.com/varmakarthik12/vncrec.git
+cd vncrec
 
-# Aliases
-vncrec d --host myhost
-vncrec watch --host myhost
+# Build for your local platform
+docker build -t vncrec .
+
+# Test it
+docker run --rm \
+  -e VR_VNC_HOST=192.168.1.100 \
+  -e VR_VNC_PASSWORD=secret \
+  -v $(pwd)/recordings:/recordings \
+  vncrec
 ```
+
+---
+
 
 ## Requirements
 
-- **FFmpeg** — Must be installed and in PATH (or specify with `--ffmpeg`)
-- **Go 1.18+** — For building from source
-
+- **FFmpeg** — Bundled in the Docker image. For binary installs, must be in `PATH` or specified with `--ffmpeg`.
+- **Go 1.21+** — For building from source.
+- **Docker** — For container usage.
+- **Tailscale account** — Optional, only needed for Tailscale connectivity.
